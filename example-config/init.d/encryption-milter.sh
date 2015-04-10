@@ -2,11 +2,12 @@
 set -e
 
 NAME=encryption-milter
-DAEMON=/usr/sbin/$NAME
-PIDFILE=/home/encmilter/$NAME.pid
-KEYRING=/home/encmilter/mailkeyring.pub
-SOCKET="inet:1337@127.0.0.1"
 USER=encmilter
+DAEMON=/usr/sbin/$NAME
+PIDFILE=/home/$USER/$NAME.pid
+KEYRING=/home/$USER/mailkeyring.pub
+SOCKET="inet:1337@127.0.0.1"
+
 OPTIONS="--pidfile $PIDFILE --socket $SOCKET --keyring $KEYRING"
 export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
 
