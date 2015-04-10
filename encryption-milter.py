@@ -14,13 +14,12 @@ from syslog import syslog, openlog, LOG_MAIL
 openlog('encryption-milter', facility=LOG_MAIL)
 setproctitle("encryption-milter")
 
-anmich = False
-
 class EncryptionMilter(Milter.Base):
 
     def __init__(self, mailkeyring_filename):
         self.bodyBuffer = None
         self.mailkeyring_filename = mailkeyring_filename
+        self.receipientWantsEncryption=False
 
     def envfrom(self, sender, *esmtpParams):
         self.bodyBuffer = StringIO.StringIO()
@@ -29,19 +28,10 @@ class EncryptionMilter(Milter.Base):
     @Milter.noreply
     def header(self, field, value):
         self.bodyBuffer.write('%s: %s\n' % (field, value))
-        global anmich
-	#syslog('email header feld...')
-	#syslog(field)
-        if (field == 'To') or (field == 'to') or (field == 'TO'):
-	    syslog('an wen?')
-	    value = value.lower()
-	    syslog(value)
-            if ('foo@bar.com' in value):
-                anmich=True
-		syslog('an mich')
-            else:
-                anmich=False
-		syslog('nicht an mich')
+        if field.lower() == 'to':
+            value = value.lower()
+            if 'foo@bar.com' in value:
+                self.receipientWantsEncryption=True
         return Milter.CONTINUE
 
     @Milter.noreply
@@ -55,32 +45,29 @@ class EncryptionMilter(Milter.Base):
         return Milter.CONTINUE
 
     def eom(self):
-        self.bodyBuffer.seek(0)        
+        self.bodyBuffer.seek(0)
         message = email.message_from_file(self.bodyBuffer)
 
-	syslog('Entscheide, ob verschluesseln!')
-        global anmich
         if message.is_multipart():
-            syslog('multipart message skipped.')
+            syslog('Multipart message, skipped.')
 
-            return Milter.CONTINUE        
+            return Milter.CONTINUE
         else:
-		syslog('message is not multipart.')
-		if anmich == True:
-	            syslog('encrypting non multipart message.')
-            
-        	    messageContent = message.get_payload()        
+                if self.receipientWantsEncryption == True:
+                    messageContent = message.get_payload()
+                    
                     if not ('-----BEGIN PGP MESSAGE-----' in messageContent):
-	            	encryptedContent = self.encrypt(messageContent)
-	        	self.replacebody(encryptedContent)
-			syslog('encrypted!');
-			return Milter.ACCEPT
-		    else:
-			syslog('nicht encrypten, weil schon encrypted');
-                    	return Milter.CONTINUE
-		else:
-		    syslog('nicht an mich, skipped!')
-		    return Milter.CONTINUE
+                        syslog('Encrypting message.');
+                        encryptedContent = self.encrypt(messageContent)
+                        self.replacebody(encryptedContent)
+
+                        return Milter.ACCEPT
+                    else:
+                        syslog('Already encrypted message, skipped.');
+                        return Milter.CONTINUE
+                else:
+                    syslog('Mail receipient is not configured to receive encrypted mail, skipped.')
+                    return Milter.CONTINUE
 
     def encrypt(self, message):
         try:
@@ -147,7 +134,7 @@ def parseArgs():
     return parser.parse_args()
 
 def main():
-    syslog('starting daemon')
+    syslog('Starting daemon')
 
     try:
       args = parseArgs()
@@ -160,13 +147,13 @@ def main():
         flags = Milter.CHGBODY
         Milter.set_flags(flags)
 
-        Milter.runmilter('encryption-milter', args.socket, 600)        
+        Milter.runmilter('encryption-milter', args.socket, 600)
 
     except Exception as e:
       syslog('An error occured')
       syslog(str(e))
 
-    syslog('shutting down daemon')
+    syslog('Shutting down daemon')
 
 if __name__ == '__main__':
     main()
