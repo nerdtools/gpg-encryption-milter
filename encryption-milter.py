@@ -29,8 +29,7 @@ class EncryptionMilter(Milter.Base):
   def header(self, field, value):
     self.bodyBuffer.write('%s: %s\n' % (field, value))
     if field.lower() == 'to':
-      value = value.lower()
-      if 'foo@bar.com' in value:
+      if 'foo@bar.com' in value.lower():
         self.receipientWantsEncryption=True
     return Milter.CONTINUE
 
